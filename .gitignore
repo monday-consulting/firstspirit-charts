@@ -1,0 +1,7 @@
+.idea
+**/*.iml
+charts/firstspirit/secrets/fs-license.conf
+*.tgz
+index.yml
+**/secrets/
+**/bamboo.vars

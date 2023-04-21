@@ -1,0 +1,143 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  namespace: {{ .Release.Namespace | quote }}
+  labels:{{- include "common.labels.standard" . | nindent 4 }}
+    app.kubernetes.io/component: firstspirit
+    {{- if .Values.firstspirit.labels }}
+    {{- include "common.tplvalues.render" (dict "value" .Values.firstspirit.labels "context" $) | nindent 4 }}
+    {{- end }}
+    {{- if .Values.commonLabels }}
+    {{- include "common.tplvalues.render" ( dict "value" .Values.commonLabels "context" $ ) | nindent 4 }}
+    {{- end }}
+  {{- if .Values.commonAnnotations }}
+  annotations: {{- include "common.tplvalues.render" ( dict "value" .Values.commonAnnotations "context" $ ) | nindent 4 }}
+  {{- end }}
+spec:
+  serviceName: {{ include "common.names.fullname" . }}-service
+  replicas: {{ .Values.firstspirit.replicaCount }}
+  selector:
+    matchLabels:{{- include "common.labels.matchLabels" . | nindent 6 }}
+      app.kubernetes.io/component: firstspirit
+  template:
+    metadata:
+      labels:{{- include "common.labels.standard" . | nindent 8 }}
+        app.kubernetes.io/component: firstspirit
+        {{- if .Values.firstspirit.podLabels }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.firstspirit.podLabels "context" $) | nindent 8 }}
+        {{- end }}
+      {{- if or .Values.firstspirit.podAnnotations }}
+      annotations:
+      {{- if .Values.firstspirit.podAnnotations }}
+      {{- include "common.tplvalues.render" (dict "value" .Values.firstspirit.podAnnotations "context" $) | nindent 8 }}
+      {{- end }}
+      {{- end }}
+    spec:
+      imagePullSecrets:
+      {{- if .Values.global.extraImagePullSecrets }}
+      {{ toYaml .Values.global.extraImagePullSecrets | indent 6 }}
+      {{- end }}
+      initContainers:
+        - name: firstspirit-init
+          image: busybox
+          command:
+            - /bin/sh
+            - -c
+            - |
+              /bin/sh <<'EOF'
+              if [[ ! -d "/opt/firstspirit5/conf" ]] ; then
+                mkdir /opt/firstspirit5/conf
+                ln -s /install/license/fs-license.conf /opt/firstspirit5/conf/fs-license.conf
+              fi
+              EOF
+          volumeMounts:
+            - name: firstspirit-data
+              mountPath: "/opt/firstspirit5"
+            - name: fs-license
+              mountPath: "/install/license"
+              subPath: "fs-license.conf"
+              readOnly: true
+      {{- if .Values.firstspirit.initContainers }}
+      {{- include "common.tplvalues.render" ( dict "value" .Values.firstspirit.initContainers "context" $ ) | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: firstspirit
+          image: {{ include "firstSpirit.image" . }}
+          imagePullPolicy: {{ .Values.firstspiritImage.pullPolicy | quote }}
+          env:
+          - name: EXT_HOSTNAME
+            value: "{{.Values.firstspirit.extHostName}}"
+          - name: EXT_PORT
+            value: "{{.Values.firstspirit.extPort}}"
+          volumeMounts:
+            - name: firstspirit-data
+              mountPath: "/opt/firstspirit5"
+            - name: fs-license
+              mountPath: "/install/license" #Mount it to install folder, so it gets copied on startup
+          {{- if .Values.firstspirit.extraVolumeMounts }}
+          {{- include "common.tplvalues.render" (dict "value" .Values.firstspirit.extraVolumeMounts "context" $) | nindent 12 }}
+          {{- end }}
+          lifecycle:
+            {{ if .Values.firstspirit.installRsync}}
+            postStart:
+              exec:
+                command: [ "/bin/sh", "-c", "apt-get --assume-yes install rsync" ]
+            {{ end }}
+          ports:
+            - containerPort: 1088
+            - containerPort: 8000
+            - containerPort: 8585
+        {{- if .Values.firstspirit.sidecars }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.firstspirit.sidecars "context" $) | nindent 8 }}
+        {{- end }}
+          resources:
+{{ toYaml .Values.firstspirit.resources | indent 12 }}
+      volumes:
+        {{- if .Values.firstspirit.extraVolumes }}
+        {{- include "common.tplvalues.render" (dict "value" .Values.firstspirit.extraVolumes "context" $) | nindent 8 }}
+        {{- end }}
+        - name: shared-volume
+          emptyDir: { }
+        - name: fs-license
+          secret:
+            secretName: {{ include "common.names.fullname" . }}-license.conf
+            items:
+              - key: fs-license.conf
+                path: "fs-license.conf"
+                mode: 0777
+      {{- if and .Values.persistence.enabled .Values.persistence.existingClaim }}
+        - name: firstspirit-data
+          persistentVolumeClaim:
+      {{- with .Values.persistence.existingClaim }}
+            claimName: {{ tpl . $ }}
+      {{- end }}
+      {{- else if not .Values.persistence.enabled }}
+        - name: firstspirit-data
+          emptyDir: { }
+  {{- else if and .Values.persistence.enabled (not .Values.persistence.existingClaim) }}
+  volumeClaimTemplates:
+    - metadata:
+        name: firstspirit-data
+        {{- if .Values.persistence.annotations }}
+        annotations: {{- include "common.tplvalues.render" (dict "value" .Values.persistence.annotations "context" $) | nindent 10 }}
+        {{- end }}
+      spec:
+        accessModes:
+          {{- range .Values.persistence.accessModes }}
+            - {{ . | quote }}
+          {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size | quote }}
+        {{- if .Values.firstspirit.advanced.fsVolumeName }}
+        volumeName: {{ .Values.firstspirit.advanced.fsVolumeName }}
+        {{- end }}
+        {{- if .Values.firstspirit.advanced.fsVolumeMode }}
+        volumeMode: {{ .Values.firstspirit.advanced.fsVolumeMode }}
+        {{- end }}
+        {{- if .Values.persistence.selector }}
+        selector: {{- include "common.tplvalues.render" (dict "value" .Values.persistence.selector "context" $) | nindent 10 }}
+        {{- end -}}
+        {{- include "common.storage.class" (dict "persistence" .Values.persistence "global" .Values.global) | nindent 8 }}
+  {{- end }}
