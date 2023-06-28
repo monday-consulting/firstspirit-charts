@@ -16,9 +16,13 @@
    --set global.extraImagePullSecrets[0].name=private-registry
    ```
 
+## Add repo
+
+`helm repo add firstspirit-charts https://monday-consulting.github.io/firstspirit-charts`
+
 ## Install chart from repo
 
-`helm install <RELEASE_NAME> firstspirit-chart/firstspirit --set-file firstspirit.license=<path-to-license-file>`
+`helm install <RELEASE_NAME> firstspirit-charts/firstspirit --set-file firstspirit.license=<path-to-license-file>`
 
 ### Upgrade running fs
 
