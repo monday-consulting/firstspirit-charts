@@ -5,7 +5,7 @@
 1. The cluster may need a image pull secret to pull the FirstSpirit image from a private repository.
 2. You may need to have an image pull secret for your private image registry. Create one with:
     ```console
-    $ kubectl create secret private-registry regcred --docker-server=<url.to.registry> --docker-username=<your-name> --docker-password=<your-pword> --docker-email=<your-email>
+    $ kubectl create secret docker-registry regcred --docker-server=<url.to.registry> --docker-username=<your-name> --docker-password=<your-pword> --docker-email=<your-email>
     ```
    and configure it in the chart with
     ```
@@ -16,9 +16,13 @@
    --set global.extraImagePullSecrets[0].name=private-registry
    ```
 
+## Add repo
+
+`helm repo add firstspirit-charts https://monday-consulting.github.io/firstspirit-charts`
+
 ## Install chart from repo
 
-`helm install <RELEASE_NAME> firstspirit-chart/firstspirit --set-file firstspirit.license=<path-to-license-file>`
+`helm install <RELEASE_NAME> firstspirit-charts/firstspirit --set-file firstspirit.license=<path-to-license-file>`
 
 ### Upgrade running fs
 
